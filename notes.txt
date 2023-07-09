@@ -1,0 +1,22 @@
+# Go modules
+
+1. go mod init: This command initializes a new module by creating a go.mod file in the current directory. 
+   The module-path is an optional argument that specifies the module's path
+
+2. go get: This command installs dependencies and updates the go.mod file.
+
+3. go install: This command compiles and installs packages along with their dependencies.
+   When used with a version suffix, it installs packages in module-aware mode, ignoring the main module.
+
+4. go tidy: This command adds missing dependencies to the go.mod file and removes unused ones. It ensures
+   that the go.mod file matches the dependencies in your code.
+
+#Example
+
+$ mkdir mymodule
+$ cd mymodule
+$ go mod init mymodule
+$go get github.com/pkg/errors
+
+This creates a new module called mymodule, and adds the github.com/pkg/errors packages as a dependency.
+go.mod file will be updated with the new dependency, and you can use it in your code.

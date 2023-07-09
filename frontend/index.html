@@ -1,0 +1,63 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <script src="wasm_exec.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.10/dist/vue.min.js"></script>
+  </head>
+  <body>
+    <div id="encryption-and-decryption">
+      <div>
+        <button @click="getEncryptedText">Btn 1</button><br/>
+        <div class="full-screen-text">{{ plainText }} <br/> {{ publicKey }}</div>
+      </div>
+    </div>
+    <script>
+      // Move Go and WebAssembly initialization to an async function, call it immediately.
+      (async function () {
+        const go = new Go();
+        await WebAssembly.instantiateStreaming(
+          fetch("main.wasm"),
+          go.importObject
+        ).then((result) => {
+          go.run(result.instance);
+        });
+
+        // Now that we know WebAssembly has loaded, we can create the Vue instance.
+        new Vue({
+          el: "#encryption-and-decryption",
+          data: {
+            plainText: "Not yet arrived!",
+            publicKey: "",
+          },
+          methods: {
+            getEncryptedText: async function () {
+              try {
+                const result = await window.getEncryptedData();
+                return result;
+              } catch (err) {
+                this.plainText = err;
+                console.err(`An error occurred: ${err}`);
+              }
+            },
+            publicKeyy: async function () {
+              this.publicKey = "publicKey"
+            },
+          },
+          // Once Vue instance is created, you can call the getEncryptedText method which is now guaranteed to have getEncryptedData available.
+          created() {
+            (async () => {
+              //this.plainText = await this.getEncryptedText();
+            })();
+          },
+        });
+      })();
+    </script>
+    <style>
+      .full-screen-text {
+        height: 100vh;
+        overflow-wrap: break-word;
+        word-wrap: break-word;
+      }
+    </style>
+  </body>
+</html>
