@@ -14,7 +14,7 @@ import (
 	"net/http"
 	"proto"
 	"strings"
-	"time"
+	// "time"
 
 	"github.com/rs/cors"
 	"google.golang.org/grpc"
@@ -48,6 +48,7 @@ func main() {
 		fmt.Println("Error generating backend keys:", err)
 		return
 	}
+	fmt.Println(len(backendPublic))
 
 	// The backend server starts an HTTP server to exchange public keys and messages
 	http.HandleFunc("/publicKey", func(w http.ResponseWriter, r *http.Request) {
@@ -72,17 +73,24 @@ func main() {
 			fmt.Println("Error generating shared secret:", err)
 			return
 		}
-
+		fmt.Println(sharedSecret)
 		// Encrypt a message
 		message := text
-		ciphertext, err := encrypt(message, sharedSecret)
+		fmt.Println(message)
+
+		newMsg := []byte("Ravi Test message")
+
+		ciphertext, err := encrypt(newMsg, sharedSecret)
+		fmt.Println(ciphertext)
 		if err != nil {
 			fmt.Println("Error encrypting message:", err)
 			return
 		}
 
 		// Start the server and send the encrypted message to the frontend server
-		startServer(ciphertext)
+		// startServer(ciphertext)
+
+		fmt.Fprintf(w, "%v", ciphertext)
 	})
 	// Create a new CORS handler
 	c := cors.New(cors.Options{
@@ -126,27 +134,27 @@ func encrypt(plaintext []byte, key []byte) ([]byte, error) {
 	return ciphertext, nil
 }
 
-func startServer(cipherText []byte) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "%x", cipherText)
-	})
+// func startServer(cipherText []byte) {
+// 	mux := http.NewServeMux()
+// 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+// 		fmt.Fprintf(w, "%x", cipherText)
+// 	})
 
-	c := cors.New(cors.Options{
-		AllowedOrigins: []string{"http://localhost:8080"},
-		AllowedMethods: []string{"GET", "OPTIONS"},
-		AllowedHeaders: []string{"Accept", "Accept-Language", "Content-Language", "Content-Type"},
-	})
+// 	c := cors.New(cors.Options{
+// 		AllowedOrigins: []string{"http://localhost:8080"},
+// 		AllowedMethods: []string{"GET", "OPTIONS"},
+// 		AllowedHeaders: []string{"Accept", "Accept-Language", "Content-Language", "Content-Type"},
+// 	})
 
-	server := &http.Server{
-		Addr:         ":9091",
-		ReadTimeout:  5 * time.Minute,
-		WriteTimeout: 10 * time.Second,
-		Handler:      c.Handler(mux),
-	}
+// 	server := &http.Server{
+// 		Addr:         ":9091",
+// 		ReadTimeout:  5 * time.Minute,
+// 		WriteTimeout: 10 * time.Second,
+// 		Handler:      c.Handler(mux),
+// 	}
 
-	log.Fatal(server.ListenAndServe())
-}
+// 	log.Fatal(server.ListenAndServe())
+// }
 
 // GenerateKeyPair generates a public and private key pair.
 func GenerateKeyPair() ([]byte, []byte, error) {

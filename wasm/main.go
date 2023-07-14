@@ -47,6 +47,10 @@ func main() {
 					if resp.StatusCode != http.StatusOK {
 						fmt.Println("Server returned non-OK status: ", resp.Status)
 					}
+				} else {
+					fmt.Println("Response is nil")
+					reject.Invoke(js.ValueOf("Response is nil"))
+					return
 				}
 
 				backendPublic, err := ioutil.ReadAll(resp.Body)
@@ -56,8 +60,14 @@ func main() {
 					return
 				}
 
+				bytesPublicKey, err := hex.DecodeString(string(backendPublic))
+				if err != nil {
+					panic(err)
+				}
+
 				// The frontend server generates the shared secret
-				sharedSecret, err := GenerateSharedSecret(frontendPrivate, backendPublic)
+				sharedSecret, err := GenerateSharedSecret(frontendPrivate, bytesPublicKey)
+				fmt.Println(sharedSecret)
 				if err != nil {
 					fmt.Println("Error generating shared secret:", err)
 					reject.Invoke(js.ValueOf(err.Error()))
@@ -80,6 +90,10 @@ func main() {
 					if resp.StatusCode != http.StatusOK {
 						fmt.Println("Server returned non-OK status: ", resp.Status)
 					}
+				} else {
+					fmt.Println("Response is nil1")
+					reject.Invoke(js.ValueOf("Response is nil1"))
+					return
 				}
 
 				ciphertext, err := ioutil.ReadAll(resp.Body)
@@ -88,11 +102,12 @@ func main() {
 					reject.Invoke(js.ValueOf(err.Error()))
 					return
 				}
-				ciphertextString, _ := hex.DecodeString(string(ciphertext))
+				// ciphertextString, _ := hex.DecodeString(string(ciphertext))
+				fmt.Println("CIPHERTEXTSTRING", ciphertext)
 
 				// The frontend server decrypts the message
-				plaintext, err := decrypt(ciphertextString, sharedSecret)
-				fmt.Println(plaintext)
+				plaintext, err := decrypt(ciphertext, sharedSecret)
+				fmt.Println("PLAINTEXT:", plaintext)
 				if err != nil {
 					fmt.Println("Error decrypting message:", err)
 					reject.Invoke(js.ValueOf(err.Error()))
@@ -103,7 +118,7 @@ func main() {
 			}()
 			return nil
 		}))
-   
+
 		return promise
 	}))
 	<-c
@@ -121,6 +136,7 @@ func decrypt(ciphertext []byte, key []byte) (string, error) {
 	}
 
 	nonceSize := gcm.NonceSize()
+	fmt.Println("Length of ciphertext passed in: ", len(ciphertext)) // How long is the ciphertext?
 	if len(ciphertext) < nonceSize { //length of ciphertext
 		return "error: ", errors.New("ciphertext too short")
 	}
@@ -144,8 +160,26 @@ func GenerateKeyPair() ([]byte, []byte, error) {
 
 // GenerateSharedSecret generates a shared secret from own private key and other party's public key.
 func GenerateSharedSecret(privateKey, publicKey []byte) ([]byte, error) {
-	x, y := elliptic.Unmarshal(elliptic.P256(), publicKey)
-	z, _ := elliptic.P256().ScalarMult(x, y, privateKey)
+	curve := elliptic.P256()
 
-	return z.Bytes(), nil
+	// Calculate the expected length of the public key
+	expectedLength := 1 + 2 * (curve.Params().BitSize / 8)
+
+	// Check if the public key has the expected length
+	if len(publicKey) != expectedLength {
+		return nil, fmt.Errorf("public key has incorrect length: got %d, want %d", len(publicKey), expectedLength)
+	}
+
+	x, y := elliptic.Unmarshal(curve, publicKey)
+	if x == nil {
+		return nil, errors.New("invalid public key")
+	}
+
+	if !curve.IsOnCurve(x, y) {
+		return nil, errors.New("public key is not on curve")
+	}
+
+	x, _ = curve.ScalarMult(x, y, privateKey)
+
+	return x.Bytes(), nil
 }
