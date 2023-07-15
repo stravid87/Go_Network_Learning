@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/elliptic"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -67,7 +69,6 @@ func main() {
 
 				// The frontend server generates the shared secret
 				sharedSecret, err := GenerateSharedSecret(frontendPrivate, bytesPublicKey)
-				fmt.Println(sharedSecret)
 				if err != nil {
 					fmt.Println("Error generating shared secret:", err)
 					reject.Invoke(js.ValueOf(err.Error()))
@@ -95,6 +96,7 @@ func main() {
 					reject.Invoke(js.ValueOf("Response is nil1"))
 					return
 				}
+				defer resp.Body.Close()
 
 				ciphertext, err := ioutil.ReadAll(resp.Body)
 				if err != nil {
@@ -102,11 +104,25 @@ func main() {
 					reject.Invoke(js.ValueOf(err.Error()))
 					return
 				}
-				// ciphertextString, _ := hex.DecodeString(string(ciphertext))
-				fmt.Println("CIPHERTEXTSTRING", ciphertext)
 
-				// The frontend server decrypts the message
-				plaintext, err := decrypt(ciphertext, sharedSecret)
+				// ciphertextString, err := hex.DecodeString(string(filtered))
+				// if err != nil {
+				// 	fmt.Println("ErrorHEX:", err)
+				// }
+				// fmt.Println("CIPHERTEXTSTRING", ciphertextString)
+				fmt.Println("ciphertext:", ciphertext)
+				fmt.Println("SHAREDSECRET:", sharedSecret)
+
+				// Assuming `ciphertext` is a byte slice containing the base64-encoded ciphertext
+				decodedMessage := make([]byte, base64.StdEncoding.DecodedLen(len(ciphertext)))
+				_, err = base64.StdEncoding.Decode(decodedMessage, ciphertext)
+
+				// Trim the decodedMessage slice to remove any extra zero bytes that were added when
+				// creating the slice with make, because the actual decoded data might be smaller than
+				// the maximum possible size that we calculated with DecodedLen.
+				decodedMessage = bytes.Trim(decodedMessage, "\x00")
+				
+				plaintext, err := decrypt(decodedMessage, sharedSecret)
 				fmt.Println("PLAINTEXT:", plaintext)
 				if err != nil {
 					fmt.Println("Error decrypting message:", err)
@@ -136,7 +152,6 @@ func decrypt(ciphertext []byte, key []byte) (string, error) {
 	}
 
 	nonceSize := gcm.NonceSize()
-	fmt.Println("Length of ciphertext passed in: ", len(ciphertext)) // How long is the ciphertext?
 	if len(ciphertext) < nonceSize { //length of ciphertext
 		return "error: ", errors.New("ciphertext too short")
 	}
@@ -159,27 +174,33 @@ func GenerateKeyPair() ([]byte, []byte, error) {
 }
 
 // GenerateSharedSecret generates a shared secret from own private key and other party's public key.
+// func GenerateSharedSecret(privateKey, publicKey []byte) ([]byte, error) {
+// 	curve := elliptic.P256()
+
+// 	// Calculate the expected length of the public key
+// 	expectedLength := 1 + 2 * (curve.Params().BitSize / 8)
+
+// 	// Check if the public key has the expected length
+// 	if len(publicKey) != expectedLength {
+// 		return nil, fmt.Errorf("public key has incorrect length: got %d, want %d", len(publicKey), expectedLength)
+// 	}
+
+// 	x, y := elliptic.Unmarshal(curve, publicKey)
+// 	if x == nil {
+// 		return nil, errors.New("invalid public key")
+// 	}
+
+// 	if !curve.IsOnCurve(x, y) {
+// 		return nil, errors.New("public key is not on curve")
+// 	}
+
+// 	x, _ = curve.ScalarMult(x, y, privateKey)
+
+//		return x.Bytes(), nil
+//	}
 func GenerateSharedSecret(privateKey, publicKey []byte) ([]byte, error) {
-	curve := elliptic.P256()
+	x, y := elliptic.Unmarshal(elliptic.P256(), publicKey)
+	z, _ := elliptic.P256().ScalarMult(x, y, privateKey)
 
-	// Calculate the expected length of the public key
-	expectedLength := 1 + 2 * (curve.Params().BitSize / 8)
-
-	// Check if the public key has the expected length
-	if len(publicKey) != expectedLength {
-		return nil, fmt.Errorf("public key has incorrect length: got %d, want %d", len(publicKey), expectedLength)
-	}
-
-	x, y := elliptic.Unmarshal(curve, publicKey)
-	if x == nil {
-		return nil, errors.New("invalid public key")
-	}
-
-	if !curve.IsOnCurve(x, y) {
-		return nil, errors.New("public key is not on curve")
-	}
-
-	x, _ = curve.ScalarMult(x, y, privateKey)
-
-	return x.Bytes(), nil
+	return z.Bytes(), nil
 }

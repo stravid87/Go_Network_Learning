@@ -33,7 +33,7 @@
             getEncryptedText: async function () {
               try {
                 const result = await window.getEncryptedData();
-                return result;
+                this.plainText = result
               } catch (err) {
                 this.plainText = err;
                 console.err(`An error occurred: ${err}`);

@@ -7,6 +7,7 @@ import (
 	"crypto/cipher"
 	"crypto/elliptic"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -14,6 +15,7 @@ import (
 	"net/http"
 	"proto"
 	"strings"
+
 	// "time"
 
 	"github.com/rs/cors"
@@ -73,15 +75,18 @@ func main() {
 			fmt.Println("Error generating shared secret:", err)
 			return
 		}
-		fmt.Println(sharedSecret)
 		// Encrypt a message
 		message := text
-		fmt.Println(message)
+		// fmt.Println(message)
 
-		newMsg := []byte("Ravi Test message")
+		// newMsg := []byte("Ravi Test message")
 
-		ciphertext, err := encrypt(newMsg, sharedSecret)
-		fmt.Println(ciphertext)
+		fmt.Println("message:", message)
+		ciphertext, err := encrypt(message, sharedSecret)
+		encodedMessage := base64.StdEncoding.EncodeToString(ciphertext)
+		fmt.Println("encodedMessage:", encodedMessage)  
+		fmt.Println("ciphertext:", ciphertext)  
+		fmt.Println("sharedSecret:", sharedSecret)
 		if err != nil {
 			fmt.Println("Error encrypting message:", err)
 			return
@@ -90,7 +95,7 @@ func main() {
 		// Start the server and send the encrypted message to the frontend server
 		// startServer(ciphertext)
 
-		fmt.Fprintf(w, "%v", ciphertext)
+		fmt.Fprintf(w, "%v", encodedMessage)
 	})
 	// Create a new CORS handler
 	c := cors.New(cors.Options{
@@ -108,7 +113,6 @@ func main() {
 }
 
 func encrypt(plaintext []byte, key []byte) ([]byte, error) {
-
 	// Validate key length
 	if len(key) != 16 && len(key) != 24 && len(key) != 32 {
 		return nil, fmt.Errorf("crypto/aes: invalid key size %d, want: 16, 24 or 32", len(key))
