@@ -138,28 +138,6 @@ func encrypt(plaintext []byte, key []byte) ([]byte, error) {
 	return ciphertext, nil
 }
 
-// func startServer(cipherText []byte) {
-// 	mux := http.NewServeMux()
-// 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-// 		fmt.Fprintf(w, "%x", cipherText)
-// 	})
-
-// 	c := cors.New(cors.Options{
-// 		AllowedOrigins: []string{"http://localhost:8080"},
-// 		AllowedMethods: []string{"GET", "OPTIONS"},
-// 		AllowedHeaders: []string{"Accept", "Accept-Language", "Content-Language", "Content-Type"},
-// 	})
-
-// 	server := &http.Server{
-// 		Addr:         ":9091",
-// 		ReadTimeout:  5 * time.Minute,
-// 		WriteTimeout: 10 * time.Second,
-// 		Handler:      c.Handler(mux),
-// 	}
-
-// 	log.Fatal(server.ListenAndServe())
-// }
-
 // GenerateKeyPair generates a public and private key pair.
 func GenerateKeyPair() ([]byte, []byte, error) {
 	private, x, y, err := elliptic.GenerateKey(elliptic.P256(), rand.Reader)
