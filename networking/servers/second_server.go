@@ -2,47 +2,48 @@ package main
 
 import (
 	// "bytes"
-	"context"
+	// "context"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"io"
-	"log"
+	// "log"
+	mathRand "math/rand"
 	"net/http"
-	"proto"
+	// "proto"
 	"strings"
+	"time"
 
 	// "time"
 
 	"github.com/rs/cors"
-	"google.golang.org/grpc"
+	// "google.golang.org/grpc"
 )
-
+var data = []interface{}{"item1", 1234567, true, 45777.6, "item5", "item6", "item7", 789777, false, 37772.1}
 func main() {
-	connection, err := grpc.Dial("localhost:9090", grpc.WithInsecure())
-	// grpc.Dial is a function that creates a client connection to the given target
-	// "localhost:9090" is the target which the function is creating a connection to.
-	// grpc.WithInsecure() is an option to create the connection without encryption, which
-	// is not recommended for production code, but it's fine in development or testing stage when security is not the critical consideration
-	if err != nil {
-		log.Println(err)
-	}
+	// connection, err := grpc.Dial("localhost:9090", grpc.WithInsecure())
 
-	client := proto.NewChatServiceClient(connection)
+	// if err != nil {
+	// 	log.Println(err)
+	// }
 
-	message := proto.Message{
-		Body: "Thank you for long Lorem!",
-	}
+	// client := proto.NewChatServiceClient(connection)
 
-	resp, err := client.SendLorem(context.Background(), &message)
-	if err != nil {
-		log.Println(err)
-	}
-	text := []byte(resp.Body)
+	// message := proto.Message{
+	// 	Body: "Thank you for long Lorem!",
+	// }
+
+	// resp, err := client.SendLorem(context.Background(), &message)
+	// if err != nil {
+	// 	log.Println(err)
+	// }
+	// text := []byte(resp.Body)
 
 	// Backend server generates its keys
 	backendPrivate, backendPublic, err := GenerateKeyPair()
@@ -58,7 +59,14 @@ func main() {
 		fmt.Fprint(w, hex.EncodeToString(backendPublic))
 	})
 
+	
 	http.HandleFunc("/message", func(w http.ResponseWriter, r *http.Request) {
+		randomData := getRandomData()
+		stringData := toString(randomData)
+
+		text := []byte(stringData)
+    	// randomData.(string)
+
 		// Receive the frontend server's public key
 		publicKey := r.URL.Query().Get("publicKey")
 		// Remove any double quotes from the string
@@ -81,12 +89,8 @@ func main() {
 
 		// newMsg := []byte("Ravi Test message")
 
-		fmt.Println("message:", message)
 		ciphertext, err := encrypt(message, sharedSecret)
 		encodedMessage := base64.StdEncoding.EncodeToString(ciphertext)
-		fmt.Println("encodedMessage:", encodedMessage)  
-		fmt.Println("ciphertext:", ciphertext)  
-		fmt.Println("sharedSecret:", sharedSecret)
 		if err != nil {
 			fmt.Println("Error encrypting message:", err)
 			return
@@ -97,6 +101,7 @@ func main() {
 
 		fmt.Fprintf(w, "%v", encodedMessage)
 	})
+
 	// Create a new CORS handler
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:8080"},  // Allow the frontend server to access the backend server
@@ -110,6 +115,16 @@ func main() {
 
 	// Start the server with the CORS handler
 	http.ListenAndServe(":9091", handler)
+}
+
+func getRandomData() interface{} {
+	mathRand.Seed(time.Now().UnixNano())
+	return data[mathRand.Intn(len(data))]
+}
+
+func toString(i interface{}) (string) {
+	str := fmt.Sprintf("%v", i)
+	return str
 }
 
 func encrypt(plaintext []byte, key []byte) ([]byte, error) {
@@ -140,19 +155,41 @@ func encrypt(plaintext []byte, key []byte) ([]byte, error) {
 
 // GenerateKeyPair generates a public and private key pair.
 func GenerateKeyPair() ([]byte, []byte, error) {
-	private, x, y, err := elliptic.GenerateKey(elliptic.P256(), rand.Reader)
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, nil, err
 	}
-	public := elliptic.Marshal(elliptic.P256(), x, y)
 
-	return private, public, nil
+	privateBytes, err := x509.MarshalECPrivateKey(privateKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to marshal private key: %v", err)
+	}
+
+	publicBytes, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to marshal public key: %v", err)
+	}
+
+	return privateBytes, publicBytes, nil
 }
 
 // GenerateSharedSecret generates a shared secret from own private key and other party's public key.
 func GenerateSharedSecret(privateKey, publicKey []byte) ([]byte, error) {
-	x, y := elliptic.Unmarshal(elliptic.P256(), publicKey)
-	z, _ := elliptic.P256().ScalarMult(x, y, privateKey)
+	privKey, err := x509.ParseECPrivateKey(privateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse private key: %v", err)
+	}
 
+	pubKey, err := x509.ParsePKIXPublicKey(publicKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse public key: %v", err)
+	}
+
+	ecdsaPubKey, ok := pubKey.(*ecdsa.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("public key is not of type *ecdsa.PublicKey")
+	}
+
+	z, _ := privKey.PublicKey.Curve.ScalarMult(ecdsaPubKey.X, ecdsaPubKey.Y, privKey.D.Bytes())
 	return z.Bytes(), nil
 }

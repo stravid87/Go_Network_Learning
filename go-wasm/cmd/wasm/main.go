@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -105,22 +107,15 @@ func main() {
 					return
 				}
 
-				// ciphertextString, err := hex.DecodeString(string(filtered))
-				// if err != nil {
-				// 	fmt.Println("ErrorHEX:", err)
-				// }
-				// fmt.Println("CIPHERTEXTSTRING", ciphertextString)
-				fmt.Println("ciphertext:", ciphertext)
-				fmt.Println("SHAREDSECRET:", sharedSecret)
-
-				// Assuming `ciphertext` is a byte slice containing the base64-encoded ciphertext
 				decodedMessage := make([]byte, base64.StdEncoding.DecodedLen(len(ciphertext)))
 				_, err = base64.StdEncoding.Decode(decodedMessage, ciphertext)
 
-				// Trim the decodedMessage slice to remove any extra zero bytes that were added when
-				// creating the slice with make, because the actual decoded data might be smaller than
-				// the maximum possible size that we calculated with DecodedLen.
 				decodedMessage = bytes.Trim(decodedMessage, "\x00")
+				if len(decodedMessage) == 0 {
+					fmt.Println("Error: Decoded message is empty after trimming")
+					reject.Invoke(js.ValueOf("Decoded message is empty after trimming"))
+					return
+				}
 				
 				plaintext, err := decrypt(decodedMessage, sharedSecret)
 				fmt.Println("PLAINTEXT:", plaintext)
@@ -164,43 +159,41 @@ func decrypt(ciphertext []byte, key []byte) (string, error) {
 
 // GenerateKeyPair generates a public and private key pair.
 func GenerateKeyPair() ([]byte, []byte, error) {
-	private, x, y, err := elliptic.GenerateKey(elliptic.P256(), rand.Reader)
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, nil, err
 	}
-	public := elliptic.Marshal(elliptic.P256(), x, y)
 
-	return private, public, nil
+	privateBytes, err := x509.MarshalECPrivateKey(privateKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to marshal private key: %v", err)
+	}
+
+	publicBytes, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to marshal public key: %v", err)
+	}
+
+	return privateBytes, publicBytes, nil
 }
 
 // GenerateSharedSecret generates a shared secret from own private key and other party's public key.
-// func GenerateSharedSecret(privateKey, publicKey []byte) ([]byte, error) {
-// 	curve := elliptic.P256()
-
-// 	// Calculate the expected length of the public key
-// 	expectedLength := 1 + 2 * (curve.Params().BitSize / 8)
-
-// 	// Check if the public key has the expected length
-// 	if len(publicKey) != expectedLength {
-// 		return nil, fmt.Errorf("public key has incorrect length: got %d, want %d", len(publicKey), expectedLength)
-// 	}
-
-// 	x, y := elliptic.Unmarshal(curve, publicKey)
-// 	if x == nil {
-// 		return nil, errors.New("invalid public key")
-// 	}
-
-// 	if !curve.IsOnCurve(x, y) {
-// 		return nil, errors.New("public key is not on curve")
-// 	}
-
-// 	x, _ = curve.ScalarMult(x, y, privateKey)
-
-//		return x.Bytes(), nil
-//	}
 func GenerateSharedSecret(privateKey, publicKey []byte) ([]byte, error) {
-	x, y := elliptic.Unmarshal(elliptic.P256(), publicKey)
-	z, _ := elliptic.P256().ScalarMult(x, y, privateKey)
+	privKey, err := x509.ParseECPrivateKey(privateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse private key: %v", err)
+	}
 
+	pubKey, err := x509.ParsePKIXPublicKey(publicKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse public key: %v", err)
+	}
+
+	ecdsaPubKey, ok := pubKey.(*ecdsa.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("public key is not of type *ecdsa.PublicKey")
+	}
+
+	z, _ := privKey.PublicKey.Curve.ScalarMult(ecdsaPubKey.X, ecdsaPubKey.Y, privKey.D.Bytes())
 	return z.Bytes(), nil
 }
