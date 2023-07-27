@@ -3,6 +3,7 @@ package main
 import (
 	// "bytes"
 	// "context"
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/ecdsa"
@@ -11,13 +12,18 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
+
 	// "log"
 	mathRand "math/rand"
 	"net/http"
+
 	// "proto"
-	"strings"
+	// "strings"
 	"time"
 
 	// "time"
@@ -25,96 +31,191 @@ import (
 	"github.com/rs/cors"
 	// "google.golang.org/grpc"
 )
+
 var data = []interface{}{"item1", 1234567, true, 45777.6, "item5", "item6", "item7", 789777, false, 37772.1}
+
+type IncomingData struct {
+	Message string `json:"message"`
+}
+
 func main() {
-	// connection, err := grpc.Dial("localhost:9090", grpc.WithInsecure())
-
+	// backendPrivate, backendPublic, err := GenerateKeyPair()
 	// if err != nil {
-	// 	log.Println(err)
+	// 	fmt.Println("Error generating backend keys:", err)
+	// 	return
 	// }
 
-	// client := proto.NewChatServiceClient(connection)
+	// // The backend server starts an HTTP server to exchange public keys and messages
+	// http.HandleFunc("/publicKey", func(w http.ResponseWriter, r *http.Request) {
+	// 	// Send the backend server's public key to the frontend server
+	// 	fmt.Fprint(w, hex.EncodeToString(backendPublic))
+	// })
 
-	// message := proto.Message{
-	// 	Body: "Thank you for long Lorem!",
-	// }
+	// http.HandleFunc("/message", func(w http.ResponseWriter, r *http.Request) {
+	// 	randomData := getRandomData()
+	// 	stringData := toString(randomData)
 
-	// resp, err := client.SendLorem(context.Background(), &message)
-	// if err != nil {
-	// 	log.Println(err)
-	// }
-	// text := []byte(resp.Body)
+	// 	text := []byte(stringData)
+	// 	// randomData.(string)
 
-	// Backend server generates its keys
-	backendPrivate, backendPublic, err := GenerateKeyPair()
-	if err != nil {
-		fmt.Println("Error generating backend keys:", err)
-		return
-	}
-	fmt.Println(len(backendPublic))
+	// 	// Receive the frontend server's public key
+	// 	publicKey := r.URL.Query().Get("publicKey")
+	// 	// Remove any double quotes from the string
+	// 	publicKey = strings.ReplaceAll(publicKey, "\"", "")
+	// 	frontendPublic, err := hex.DecodeString(publicKey)
+	// 	if err != nil {
+	// 		fmt.Println("Error decoding frontend public key:", err)
+	// 		return
+	// 	}
 
-	// The backend server starts an HTTP server to exchange public keys and messages
-	http.HandleFunc("/publicKey", func(w http.ResponseWriter, r *http.Request) {
-		// Send the backend server's public key to the frontend server
-		fmt.Fprint(w, hex.EncodeToString(backendPublic))
-	})
+	// 	// Generate the shared secret
+	// 	sharedSecret, err := GenerateSharedSecret(backendPrivate, frontendPublic)
+	// 	if err != nil {
+	// 		fmt.Println("Error generating shared secret:", err)
+	// 		return
+	// 	}
+	// 	// Encrypt a message
+	// 	message := text
+	// 	// fmt.Println(message)
 
-	
-	http.HandleFunc("/message", func(w http.ResponseWriter, r *http.Request) {
-		randomData := getRandomData()
-		stringData := toString(randomData)
+	// 	// newMsg := []byte("Ravi Test message")
 
-		text := []byte(stringData)
-    	// randomData.(string)
+	// 	ciphertext, err := encrypt(message, sharedSecret)
+	// 	encodedMessage := base64.StdEncoding.EncodeToString(ciphertext)
+	// 	if err != nil {
+	// 		fmt.Println("Error encrypting message:", err)
+	// 		return
+	// 	}
 
-		// Receive the frontend server's public key
-		publicKey := r.URL.Query().Get("publicKey")
-		// Remove any double quotes from the string
-		publicKey = strings.ReplaceAll(publicKey, "\"", "")
-		frontendPublic, err := hex.DecodeString(publicKey)
-		if err != nil {
-			fmt.Println("Error decoding frontend public key:", err)
-			return
-		}
+	// 	// Start the server and send the encrypted message to the frontend server
+	// 	// startServer(ciphertext)
 
-		// Generate the shared secret
-		sharedSecret, err := GenerateSharedSecret(backendPrivate, frontendPublic)
-		if err != nil {
-			fmt.Println("Error generating shared secret:", err)
-			return
-		}
-		// Encrypt a message
-		message := text
-		// fmt.Println(message)
-
-		// newMsg := []byte("Ravi Test message")
-
-		ciphertext, err := encrypt(message, sharedSecret)
-		encodedMessage := base64.StdEncoding.EncodeToString(ciphertext)
-		if err != nil {
-			fmt.Println("Error encrypting message:", err)
-			return
-		}
-
-		// Start the server and send the encrypted message to the frontend server
-		// startServer(ciphertext)
-
-		fmt.Fprintf(w, "%v", encodedMessage)
-	})
+	// 	fmt.Fprintf(w, "%v", encodedMessage)
+	// })
 
 	// Create a new CORS handler
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:8080"},  // Allow the frontend server to access the backend server
+		AllowedOrigins:   []string{"http://localhost:8080"},         // Allow the frontend server to access the backend server
 		AllowedMethods:   []string{"GET", "POST", "PUT", "OPTIONS"}, // Allow these HTTP methods
-		AllowedHeaders:   []string{"Accept", "content-type"}, // Allow these HTTP headers
-		AllowCredentials: true,                               // Allow cookies
+		AllowedHeaders:   []string{"Accept", "content-type"},        // Allow these HTTP headers
+		AllowCredentials: true,                                      // Allow cookies
 	})
-
-	// Wrap the original handler with the CORS handler
 	handler := c.Handler(http.DefaultServeMux)
 
-	// Start the server with the CORS handler
+	http.HandleFunc("/incoming-data", handleIncomingData)
+	frontendPrivate, frontendPublic, err := GenerateKeyPair()
+	if err != nil {
+		fmt.Println("Error generating frontend keys:", err)
+		return
+	}
+
+	// The frontend server sends its public key to the backend server and receives the backend server's public key
+	resp, err := http.Get("/publicKey")
+	if err != nil {
+		fmt.Println("Error getting backend public key:", err)
+		return
+	}
+	// Here, we first check if resp is not nil.
+	if resp != nil {
+		// We also check if resp.Body is not nil before closing it.
+		if resp.Body != nil {
+			defer resp.Body.Close()
+		}
+		// Checking the HTTP status code
+		if resp.StatusCode != http.StatusOK {
+			fmt.Println("Server returned non-OK status: ", resp.Status)
+		}
+	} else {
+		fmt.Println("Response is nil")
+		return
+	}
+
+	backendPublic, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("Error reading backend public key:", err)
+		return
+	}
+
+	bytesPublicKey, err := hex.DecodeString(string(backendPublic))
+	if err != nil {
+		panic(err)
+	}
+
+	// The frontend server generates the shared secret
+	sharedSecret, err := GenerateSharedSecret(frontendPrivate, bytesPublicKey)
+	if err != nil {
+		fmt.Println("Error generating shared secret:", err)
+		return
+	}
+
+	// The frontend server sends its public key to the backend server and receives an encrypted message
+	resp, err = http.Get("/message?publicKey=" + hex.EncodeToString(frontendPublic))
+	if err != nil {
+		fmt.Println("Error getting message:", err)
+		return
+	}
+	// Duplicate the resp and resp.Body null checks for the second http.Get
+	if resp != nil {
+		if resp.Body != nil {
+			defer resp.Body.Close()
+		}
+		// Checking the HTTP status code
+		if resp.StatusCode != http.StatusOK {
+			fmt.Println("Server returned non-OK status: ", resp.Status)
+		}
+	} else {
+		fmt.Println("Response is nil1")
+		return
+	}
+	defer resp.Body.Close()
+
+	ciphertext, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("Error reading message:", err)
+		return
+	}
+
+	decodedMessage := make([]byte, base64.StdEncoding.DecodedLen(len(ciphertext)))
+	_, err = base64.StdEncoding.Decode(decodedMessage, ciphertext)
+
+	decodedMessage = bytes.Trim(decodedMessage, "\x00")
+	if len(decodedMessage) == 0 {
+		fmt.Println("Error: Decoded message is empty after trimming")
+		return
+	}
+
+	plaintext, err := decrypt(decodedMessage, sharedSecret)
+	fmt.Println("PLAINTEXT:", plaintext)
+	if err != nil {
+		fmt.Println("Error decrypting message:", err)
+		return
+	}
+	
 	http.ListenAndServe(":9091", handler)
+}
+
+func handleIncomingData(w http.ResponseWriter, r *http.Request) {
+	// Read the incoming data from the request body
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
+	// Parse the JSON data into a struct
+	var data IncomingData
+	err = json.Unmarshal(body, &data)
+	if err != nil {
+		http.Error(w, "Failed to parse JSON data", http.StatusBadRequest)
+		return
+	}
+
+	// Print the incoming data
+	fmt.Println("Incoming data:", data)
+
+	// Optionally, you can send a response back to the frontserver
+	// For example, you can use w.Write() to send a simple response
+	// Or you can use w.WriteHeader() and w.Write() to send a custom response with a status code
 }
 
 func getRandomData() interface{} {
@@ -122,8 +223,12 @@ func getRandomData() interface{} {
 	return data[mathRand.Intn(len(data))]
 }
 
-func toString(i interface{}) (string) {
+func toString(i interface{}) string {
 	str := fmt.Sprintf("%v", i)
+	// str, ok := i.(string)
+	// str, ok := i.(string); if ok != true {
+	// 	fmt.Println("OK:", ok)
+	// }
 	return str
 }
 
@@ -151,6 +256,28 @@ func encrypt(plaintext []byte, key []byte) ([]byte, error) {
 	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
 
 	return ciphertext, nil
+}
+
+func decrypt(ciphertext []byte, key []byte) (string, error) {
+	c, err := aes.NewCipher(key)
+	if err != nil {
+		return "error: ", err
+	}
+
+	gcm, err := cipher.NewGCM(c)
+	if err != nil {
+		return "error: ", err
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(ciphertext) < nonceSize { //length of ciphertext
+		return "error: ", errors.New("ciphertext too short")
+	}
+
+	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
+	byteText, err := gcm.Open(nil, nonce, ciphertext, nil)
+
+	return string(byteText), err
 }
 
 // GenerateKeyPair generates a public and private key pair.

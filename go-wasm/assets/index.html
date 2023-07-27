@@ -7,8 +7,14 @@
   <body>
     <div id="encryption-and-decryption">
       <div>
-        <button @click="getEncryptedText">Get data</button><br/>
-        <div class="full-screen-text">{{ plainText }} <br/> {{ publicKey }}</div>
+        <form @submit.prevent="sendServer">
+          <input v-model="message" type="text" textarea />
+          <button type="submit">submit</button><br />
+        </form>
+        <div class="full-screen-text">
+          {{ plainText }} <br />
+          {{ publicKey }}
+        </div>
       </div>
     </div>
     <script>
@@ -20,6 +26,7 @@
           go.importObject
         ).then((result) => {
           go.run(result.instance);
+          console.log("Hello from WASM")
         });
 
         // Now that we know WebAssembly has loaded, we can create the Vue instance.
@@ -27,27 +34,98 @@
           el: "#encryption-and-decryption",
           data: {
             plainText: "Not yet arrived!",
-            publicKey: "",
+            message: "",
           },
+          props: ["publicKey"],
           methods: {
-            getEncryptedText: async function () {
+            sendServer: async function () {
               try {
-                const result = await window.getEncryptedData();
-                this.plainText = result
+                const keyPair = await window.publicKey();
+                const private = keyPair[0];
+                const public = keyPair[1];
+
+                localstorage.setItem("backendPrivate", private);
+
+                await this.sendKeytoBackend(public);
+
+                const encryptedText = await window.encrypted(
+                  this.message,
+                  this.public,
+                  localstorage.getItem("backendPrivate")
+                );
+
+                await this.sendMessageToBackend(encryptedText);
               } catch (err) {
-                this.plainText = err;
-                console.err(`An error occurred: ${err}`);
+                console.log("ERR", err);
               }
             },
-            publicKeyy: async function () {
-              this.publicKey = "publicKey"
+            sendKeytoBackend: async function (pubKey) {
+              fetch("http://localhost:9091/publicKey", {
+                method: "POST",
+                headers: {
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({ key: pubKey }),
+                },
+              })
+                .then((response) => {
+                  // Handle the response from the backend server
+                  if (response.ok) {
+                    console.log("Message sent successfully");
+                  } else {
+                    console.log("Failed to send message");
+                  }
+                })
+                .catch((error) => {
+                  console.log("Error sending message:", error);
+                });
             },
-          },
-          // Once Vue instance is created, you can call the getEncryptedText method which is now guaranteed to have getEncryptedData available.
-          created() {
-            (async () => {
-              //this.plainText = await this.getEncryptedText();
-            })();
+            sendMessage: async function (message) {
+              fetch(
+                `http://localhost:9091/message?publicKey=${this.publicKey}`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({ message: message }),
+                }
+              )
+                .then((response) => {
+                  // Handle the response from the backend server
+                  if (response.ok) {
+                    console.log("Message sent successfully");
+                  } else {
+                    console.log("Message sent successfully");
+                  }
+                })
+                .catch((error) => {
+                  console.error("Error sending message:", error);
+                });
+            },
+            // JavaScript function to send a message to the backend server
+            sendMessageToBackend: async function (message) {
+              // Make an HTTP POST request to the backend server
+              fetch("http://localhost:9091/incoming-data", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ message: message }),
+              })
+                .then((response) => {
+                  // Handle the response from the backend server
+                  if (response.ok) {
+                    console.log("Message sent successfully");
+                  } else {
+                    console.log("Failed to send message");
+                  }
+                })
+                .catch((error) => {
+                  console.log("Error sending message:", error);
+                });
+            },
           },
         });
       })();
