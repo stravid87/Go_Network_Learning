@@ -1,10 +1,14 @@
 package main
 
-import "crypto/ecdh"
+import (
+	"crypto"
+	"crypto/ecdh"
+	"crypto/ecdsa"
+)
 
 type KeyPairSigning struct {
-	privSK_bs []byte
-	pubSK_bs  []byte
+	privSK_ptr *ecdsa.PrivateKey
+	pubSK_val  crypto.PublicKey
 }
 
 type KeyPairDH struct {

@@ -7,15 +7,33 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/x509"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
 )
 
-var KeyPairS_c KeyPairSigning
+func StringToBase64(input []byte) string {
+	b64str := base64.StdEncoding.EncodeToString(input)
+	return b64str
+}
 
-var KeyPairDH_c KeyPairDH
+func HashByteSlice(input []byte) ([]byte, error) {
+	hash := sha256.New()
+	if _, err := hash.Write(input); err != nil {
+		return nil, fmt.Errorf("HashMessage of WASM module failed with error %s", err.Error())
+	}
+	return hash.Sum(nil), nil
+}
+
+func SignByteSliceASN1(privK *ecdsa.PrivateKey, inputHash []byte) ([]byte, error) {
+	theASN1Signature, err := ecdsa.SignASN1(rand.Reader, privK, inputHash)
+	if err != nil {
+		return nil, fmt.Errorf("SignASN1 error: %w", err.Error())
+	}
+	return theASN1Signature, nil
+}
 
 func Decrypt(ciphertext []byte, key []byte) (string, error) {
 	c, err := aes.NewCipher(key)
@@ -38,6 +56,7 @@ func Decrypt(ciphertext []byte, key []byte) (string, error) {
 
 	return string(byteText), err
 }
+
 func Encrypt(plaintext []byte, key []byte) ([]byte, error) {
 	// Validate key length
 	if len(key) != 16 && len(key) != 24 && len(key) != 32 {
@@ -64,26 +83,14 @@ func Encrypt(plaintext []byte, key []byte) ([]byte, error) {
 	return ciphertext, nil
 }
 
-// GenerateKeyPair generates a public and private key pair.
 func GenerateSigningKeyPair() error {
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return err
 	}
-
-	privateBytes, err := x509.MarshalECPrivateKey(privateKey)
-	if err != nil {
-		return fmt.Errorf("failed to marshal private key: %v", err)
-	}
-
-	publicBytes, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
-	if err != nil {
-		return fmt.Errorf("failed to marshal public key: %v", err)
-	}
-
-	KeyPairS_c.privSK_bs = privateBytes
-	KeyPairS_c.pubSK_bs = publicBytes
-
+	publicKey := privateKey.Public()
+	KeyPairS_c.privSK_ptr = privateKey
+	KeyPairS_c.pubSK_val = publicKey
 	return nil
 }
 
@@ -101,8 +108,6 @@ func GenerateDHKeyPair(curve ecdh.Curve) error {
 	//Note: for ECDH, use the crypto/ecdh package. This function returns an encoding equivalent to that of PublicKey.Bytes in crypto/ecdh.
 	return nil
 }
-
-// GenerateSharedSecret generates a shared secret from own private key and other party's public key.
 
 func GenerateSharedSecret(privateKey, publicKey []byte) ([]byte, error) {
 	x, y := elliptic.Unmarshal(elliptic.P256(), publicKey)

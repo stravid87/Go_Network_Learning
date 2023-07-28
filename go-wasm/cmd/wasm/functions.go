@@ -8,8 +8,18 @@ import (
 )
 
 func SayHello(this js.Value, args []js.Value) interface{} {
-	fmt.Println("Hello form WASM internals")
-	return nil
+	resolve_reject_internals := func(this js.Value, args []js.Value) interface{} {
+		resolve := args[0]
+		//reject := args[1]
+		go func() {
+			//reject.Invoke(js.ValueOf(""))
+			resolve.Invoke(js.ValueOf("Hello!"))
+		}()
+		return nil
+	}
+	promiseConstructor := js.Global().Get("Promise")
+	promise := promiseConstructor.New(js.FuncOf(resolve_reject_internals))
+	return promise
 }
 
 func HashString(this js.Value, args []js.Value) interface{} {
@@ -25,6 +35,26 @@ func HashString(this js.Value, args []js.Value) interface{} {
 			str_hex := hex.EncodeToString(hash.Sum(nil))
 			resolve.Invoke(js.ValueOf(str_hex))
 		}(jsString)
+		return nil
+	}
+	promiseConstructor := js.Global().Get("Promise")
+	promise := promiseConstructor.New(js.FuncOf(resolve_reject_internals))
+	return promise
+}
+
+func SignString(this js.Value, args []js.Value) interface{} {
+	arg0BS := []byte(args[0].String())
+	resolve_reject_internals := func(this js.Value, args []js.Value) interface{} {
+		resolve := args[0]
+		reject := args[1]
+		go func(input []byte) {
+			hash, err := HashByteSlice(input)
+			if err != nil {
+				reject.Invoke(js.ValueOf(fmt.Errorf("Error hashing: \"%s\"", err.Error())))
+			}
+			signatureASN1, err := SignByteSliceASN1(KeyPairS_c.privSK_ptr, hash)
+			resolve.Invoke(js.ValueOf(StringToBase64(signatureASN1)))
+		}(arg0BS)
 		return nil
 	}
 	promiseConstructor := js.Global().Get("Promise")

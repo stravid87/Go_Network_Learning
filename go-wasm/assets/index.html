@@ -4,8 +4,8 @@
     <script src="wasm_exec.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/vue@2.6.10/dist/vue.min.js"></script>
     
+    <!-- Init the WASM module -->
     <script>
-      // Instantiate WASM module
       (async function () {
         const go = new Go();
         await WebAssembly.instantiateStreaming(
@@ -25,7 +25,6 @@
         border: 1px solid black;
       }
     </style>
-
   </head>
   
   <body>
@@ -33,10 +32,10 @@
       <div>
         <form @submit.prevent>
           <input v-model="message" type="text" textarea />
-          <button @click="hashMessage">submit</button><br />
+          <button @click="signMessage">submit</button><br />
         </form>
         <div class="full-screen-text">
-          {{ hash }}
+          {{ signatureASN1_b64 }}
         </div>
       </div>
     </div>
@@ -51,15 +50,22 @@ new Vue({
   data: {
     hash: "",
     message: "",
+    signatureASN1_b64: "",
   },
   props: ["publicKey"],
   methods: {
     hashMessage: async function(){
-      const testString = "Ravi's Test String"
       const result = await window.hashMessage(this.message)
       console.log("message: ", this.message)
       console.log("message hashed: ", result)
       this.hash = result
+    },
+
+    signMessage: async function (){
+      const result = await window.signString(this.message)
+      this.signatureASN1_b64 = result
+      console.log("message: ", this.message)
+      console.log("message signed & ASN1 encoded: ", this.signatureASN1_b64) 
     }
     // sendServer: async function () {
     //   try {
