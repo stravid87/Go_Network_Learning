@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"syscall/js"
 )
 
@@ -14,6 +16,35 @@ func SayHello(this js.Value, args []js.Value) interface{} {
 		go func() {
 			//reject.Invoke(js.ValueOf(""))
 			resolve.Invoke(js.ValueOf("Hello!"))
+		}()
+		return nil
+	}
+	promiseConstructor := js.Global().Get("Promise")
+	promise := promiseConstructor.New(js.FuncOf(resolve_reject_internals))
+	return promise
+}
+
+func PingBackend(this js.Value, args []js.Value) interface{} {
+	resolve_reject_internals := func(this js.Value, args []js.Value) interface{} {
+		resolve := args[0]
+		reject := args[1]
+		go func() {
+			resp, err := http.Get("http://localhost:8080/ping")
+			if err != nil {
+				reject.Invoke("Failure to ping backend. Error: ", js.ValueOf(err.Error()))
+				return
+			}
+			if resp == nil || resp.Body == nil || resp.StatusCode != http.StatusOK {
+				reject.Invoke(js.ValueOf(fmt.Errorf("500 error from server? ", err.Error())))
+				return
+			}
+
+			response_BS, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				reject.Invoke(js.ValueOf(fmt.Errorf("Error reading response body: ", err.Error())))
+			}
+			fmt.Println("I should be a successful ping...")
+			resolve.Invoke(js.ValueOf(string(response_BS)))
 		}()
 		return nil
 	}

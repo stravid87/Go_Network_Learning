@@ -30,13 +30,23 @@
   <body>
     <div id="encryption-and-decryption">
       <div>
+        <p>Utils</p>
+        <ul>
+          <li><button @click="sayHelloFromWASM"> Say Hello From WASM</button></li>
+          <li><button @click="pingBackend">Ping Backend</button></li>
+
+        </ul>
+        <hr>
+      <div>  
         <form @submit.prevent>
           <input v-model="message" type="text" textarea />
-          <button @click="signMessage">submit</button><br />
+          <button @click="signMessage">Sign Message</button><br />
         </form>
+
         <div class="full-screen-text">
           {{ signatureASN1_b64 }}
         </div>
+
       </div>
     </div>
   </body>
@@ -54,13 +64,16 @@ new Vue({
   },
   props: ["publicKey"],
   methods: {
-    hashMessage: async function(){
-      const result = await window.hashMessage(this.message)
-      console.log("message: ", this.message)
-      console.log("message hashed: ", result)
-      this.hash = result
+    sayHelloFromWASM: async function() {
+      const result = await window.sayHello()
+      console.log("Result from WASM: ", result)
     },
 
+    pingBackend: async function(){
+      const result = await window.pingBackend()
+      console.log("WASM 'pingBackend' function call with result: ", result)
+    },
+   
     signMessage: async function (){
       const result = await window.signString(this.message)
       this.signatureASN1_b64 = result
