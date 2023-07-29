@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -86,6 +88,46 @@ func SignString(this js.Value, args []js.Value) interface{} {
 			signatureASN1, err := SignByteSliceASN1(KeyPairS_c.privSK_ptr, hash)
 			resolve.Invoke(js.ValueOf(StringToBase64(signatureASN1)))
 		}(arg0BS)
+		return nil
+	}
+	promiseConstructor := js.Global().Get("Promise")
+	promise := promiseConstructor.New(js.FuncOf(resolve_reject_internals))
+	return promise
+}
+
+func SendPost(this js.Value, args []js.Value) interface{} {
+	resolve_reject_internals := func(this js.Value, args []js.Value) interface{} {
+		resolve := args[0]
+		reject := args[1]
+		go func() {
+			var url = "http://localhost:8080/post-ur-hash"
+			simplePost := SimplePost{
+				Id:     0,
+				Title:  "A Title",
+				Body:   "Definitely 'Yay' :)",
+				UserId: 99,
+			}
+			simplePost_bs, err := json.Marshal(simplePost)
+			if err != nil {
+				fmt.Errorf("Error on POST to %s: %s", url, err.Error())
+				reject.Invoke(js.ValueOf("Failure on Post"))
+			}
+
+			resp, err := http.Post(url, "Content-Type:application/json", bytes.NewReader(simplePost_bs))
+			if err != nil {
+				fmt.Errorf("Error on POST to %s: %s", url, err.Error())
+				reject.Invoke(js.ValueOf("Failure on Post"))
+			}
+
+			defer resp.Body.Close()
+
+			response_BS, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				reject.Invoke(js.ValueOf(fmt.Errorf("Error reading response body: ", err.Error())))
+			}
+
+			resolve.Invoke(js.ValueOf(fmt.Sprintf("I got << %s >> in response to sendPost.", string(response_BS))))
+		}()
 		return nil
 	}
 	promiseConstructor := js.Global().Get("Promise")

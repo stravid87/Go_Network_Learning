@@ -34,6 +34,7 @@
         <ul>
           <li><button @click="sayHelloFromWASM"> Say Hello From WASM</button></li>
           <li><button @click="pingBackend">Ping Backend</button></li>
+          <li><button @click="sendPost">Send Post</button></li>
 
         </ul>
         <hr>
@@ -74,6 +75,11 @@ new Vue({
       console.log("WASM 'pingBackend' function call with result: ", result)
     },
    
+    sendPost: async function(){
+      const result = await window.sendPost()
+      console.log("console.log('x'): ): ", result)
+    },
+
     signMessage: async function (){
       const result = await window.signString(this.message)
       this.signatureASN1_b64 = result
