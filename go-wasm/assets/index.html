@@ -3,22 +3,9 @@
     <meta charset="utf-8" />
     <script src="wasm_exec.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/vue@2.6.10/dist/vue.min.js"></script>
-  </head>
-  <body>
-    <div id="encryption-and-decryption">
-      <div>
-        <form @submit.prevent="sendServer">
-          <input v-model="message" type="text" textarea />
-          <button type="submit">submit</button><br />
-        </form>
-        <div class="full-screen-text">
-          {{ plainText }} <br />
-          {{ publicKey }}
-        </div>
-      </div>
-    </div>
+    
+    <!-- Init the WASM module -->
     <script>
-      // Move Go and WebAssembly initialization to an async function, call it immediately.
       (async function () {
         const go = new Go();
         await WebAssembly.instantiateStreaming(
@@ -26,110 +13,10 @@
           go.importObject
         ).then((result) => {
           go.run(result.instance);
-          console.log("Hello from WASM")
-        });
-
-        // Now that we know WebAssembly has loaded, we can create the Vue instance.
-        new Vue({
-          el: "#encryption-and-decryption",
-          data: {
-            plainText: "Not yet arrived!",
-            message: "",
-          },
-          props: ["publicKey"],
-          methods: {
-            sendServer: async function () {
-              try {
-                const keyPair = await window.publicKey();
-                const private = keyPair[0];
-                const public = keyPair[1];
-
-                localstorage.setItem("backendPrivate", private);
-
-                await this.sendKeytoBackend(public);
-
-                const encryptedText = await window.encrypted(
-                  this.message,
-                  this.public,
-                  localstorage.getItem("backendPrivate")
-                );
-
-                await this.sendMessageToBackend(encryptedText);
-              } catch (err) {
-                console.log("ERR", err);
-              }
-            },
-            sendKeytoBackend: async function (pubKey) {
-              fetch("http://localhost:9091/publicKey", {
-                method: "POST",
-                headers: {
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({ key: pubKey }),
-                },
-              })
-                .then((response) => {
-                  // Handle the response from the backend server
-                  if (response.ok) {
-                    console.log("Message sent successfully");
-                  } else {
-                    console.log("Failed to send message");
-                  }
-                })
-                .catch((error) => {
-                  console.log("Error sending message:", error);
-                });
-            },
-            sendMessage: async function (message) {
-              fetch(
-                `http://localhost:9091/message?publicKey=${this.publicKey}`,
-                {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({ message: message }),
-                }
-              )
-                .then((response) => {
-                  // Handle the response from the backend server
-                  if (response.ok) {
-                    console.log("Message sent successfully");
-                  } else {
-                    console.log("Message sent successfully");
-                  }
-                })
-                .catch((error) => {
-                  console.error("Error sending message:", error);
-                });
-            },
-            // JavaScript function to send a message to the backend server
-            sendMessageToBackend: async function (message) {
-              // Make an HTTP POST request to the backend server
-              fetch("http://localhost:9091/incoming-data", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ message: message }),
-              })
-                .then((response) => {
-                  // Handle the response from the backend server
-                  if (response.ok) {
-                    console.log("Message sent successfully");
-                  } else {
-                    console.log("Failed to send message");
-                  }
-                })
-                .catch((error) => {
-                  console.log("Error sending message:", error);
-                });
-            },
-          },
-        });
+        })
       })();
     </script>
+
     <style>
       .full-screen-text {
         height: 150px;
@@ -138,5 +25,156 @@
         border: 1px solid black;
       }
     </style>
+  </head>
+  
+  <body>
+    <div id="encryption-and-decryption">
+      <div>
+        <p>Utils</p>
+        <ul>
+          <li><button @click="sayHelloFromWASM"> Say Hello From WASM</button></li>
+          <li><button @click="pingBackend">Ping Backend</button></li>
+          <li><button @click="sendPost">Send Post</button></li>
+
+        </ul>
+        <hr>
+      <div>  
+        <form @submit.prevent>
+          <input v-model="message" type="text" textarea />
+          <button @click="signMessage">Sign Message</button><br />
+        </form>
+
+        <div class="full-screen-text">
+          {{ signatureASN1_b64 }}
+        </div>
+
+      </div>
+    </div>
   </body>
+  <footer>
+  </footer>
+
+  <script>
+  // Make it a Vue SPA
+new Vue({
+  el: "#encryption-and-decryption",
+  data: {
+    hash: "",
+    message: "",
+    signatureASN1_b64: "",
+  },
+  props: ["publicKey"],
+  methods: {
+    sayHelloFromWASM: async function() {
+      const result = await window.sayHello()
+      console.log("Result from WASM: ", result)
+    },
+
+    pingBackend: async function(){
+      const result = await window.pingBackend()
+      console.log("WASM 'pingBackend' function call with result: ", result)
+    },
+   
+    sendPost: async function(){
+      const result = await window.sendPost()
+      console.log("console.log('x'): ): ", result)
+    },
+
+    signMessage: async function (){
+      const result = await window.signString(this.message)
+      this.signatureASN1_b64 = result
+      console.log("message: ", this.message)
+      console.log("message signed & ASN1 encoded: ", this.signatureASN1_b64) 
+    }
+    // sendServer: async function () {
+    //   try {
+    //     const keyPair = await window.publicKey();
+    //     const private = keyPair[0];
+    //     const public = keyPair[1];
+
+    //     localstorage.setItem("backendPrivate", private);
+
+    //     await this.sendKeytoBackend(public);
+
+    //     const encryptedText = await window.encrypted(
+    //       this.message,
+    //       this.public,
+    //       localstorage.getItem("backendPrivate")
+    //     );
+
+    //     await this.sendMessageToBackend(encryptedText);
+    //   } catch (err) {
+    //     console.log("ERR", err);
+    //   }
+    // },
+    // sendKeytoBackend: async function (pubKey) {
+    //   fetch("http://localhost:9091/publicKey", {
+    //     method: "POST",
+    //     headers: {
+    //       headers: {
+    //         "Content-Type": "application/json",
+    //       },
+    //       body: JSON.stringify({ key: pubKey }),
+    //     },
+    //   })
+    //     .then((response) => {
+    //       // Handle the response from the backend server
+    //       if (response.ok) {
+    //         console.log("Message sent successfully");
+    //       } else {
+    //         console.log("Failed to send message");
+    //       }
+    //     })
+    //     .catch((error) => {
+    //       console.log("Error sending message:", error);
+    //     });
+    // },
+    // sendMessage: async function (message) {
+    //   fetch(
+    //     `http://localhost:9091/message?publicKey=${this.publicKey}`,
+    //     {
+    //       method: "POST",
+    //       headers: {
+    //         "Content-Type": "application/json",
+    //       },
+    //       body: JSON.stringify({ message: message }),
+    //     }
+    //   )
+    //     .then((response) => {
+    //       // Handle the response from the backend server
+    //       if (response.ok) {
+    //         console.log("Message sent successfully");
+    //       } else {
+    //         console.log("Message sent successfully");
+    //       }
+    //     })
+    //     .catch((error) => {
+    //       console.error("Error sending message:", error);
+    //     });
+    // },
+    // sendMessageToBackend: async function (message) {
+    //   // Make an HTTP POST request to the backend server
+    //   fetch("http://localhost:9091/incoming-data", {
+    //     method: "POST",
+    //     headers: {
+    //       "Content-Type": "application/json",
+    //     },
+    //     body: JSON.stringify({ message: message }),
+    //   })
+    //     .then((response) => {
+    //       // Handle the response from the backend server
+    //       if (response.ok) {
+    //         console.log("Message sent successfully");
+    //       } else {
+    //         console.log("Failed to send message");
+    //       }
+    //     })
+    //     .catch((error) => {
+    //       console.log("Error sending message:", error);
+    //     });
+    // },
+  },
+});
+
+</script>
 </html>
