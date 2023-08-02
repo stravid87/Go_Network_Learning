@@ -96,15 +96,16 @@ func SignString(this js.Value, args []js.Value) interface{} {
 }
 
 func SendPost(this js.Value, args []js.Value) interface{} {
+	comingData := args[0].String()
 	resolve_reject_internals := func(this js.Value, args []js.Value) interface{} {
 		resolve := args[0]
 		reject := args[1]
 		go func() {
-			var url = "http://localhost:8080/post-ur-hash"
+			var url = "http://localhost:9091/post-ur-hash"
 			simplePost := SimplePost{
 				Id:     0,
-				Title:  "A Title",
-				Body:   "Definitely 'Yay' :)",
+				Title:  comingData,
+				Body:   "Definitely",
 				UserId: 99,
 			}
 			simplePost_bs, err := json.Marshal(simplePost)

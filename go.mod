@@ -1,4 +1,4 @@
-module go_networking_learning
+module example.com/m
 
 go 1.20
 

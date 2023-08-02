@@ -27,7 +27,7 @@ func main() {
 	})
 
 	http.HandleFunc("/post-ur-hash", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("/post-ur-hash API endpoint hit.")
+		fmt.Println("/post-ur-hash API endpoint hit...")
 
 		defer r.Body.Close()
 
@@ -40,7 +40,7 @@ func main() {
 		if json.Unmarshal(r_bs, &mySimplePost); err != nil {
 			fmt.Println(err.Error())
 		}
-		fmt.Println("yay? :", mySimplePost.Body)
+		fmt.Println("yay? :", mySimplePost.Title)
 
 		// Simple echo
 		io.Copy(w, r.Body)
